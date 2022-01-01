@@ -1,9 +1,8 @@
 import groupBy from 'lodash/groupBy';
-import isEqual from 'lodash/isEqual';
 import orderBy from 'lodash/orderBy';
 import sum from 'lodash/sum';
-import { Player } from '../types/Player';
-import { ScoringCategory, ScoringCategoryDescriptions } from '../types/Scoring';
+import {Player} from '../types/Player';
+import {ScoringCategory, ScoringCategoryDescriptions} from '../types/Scoring';
 
 export interface IScoreCalculator {
   calculateUpperSectionTotal: (player: Player) => number;
@@ -16,40 +15,48 @@ export interface IScoreCalculator {
 const groupDice = (dice: number[]) => {
   // Group dice by their value, then order them by the count of each value showing (descending)
   const grouped = groupBy(dice);
+
   let result: number[][] = [];
-  for (let d = 1; d <= 6; d++) {
-    if (grouped[d]) result.push(grouped[d]);
+
+  for (let d = 1; d <= dice.length; d++) {
+    if (grouped[d]) {
+      result.push(grouped[d]);
+    }
   }
-  result = orderBy(result, (arr) => arr.length, "desc");
+
+  result = orderBy(result, (arr: number[]) => arr.length, "desc");
+
   return result;
 };
 
+function includesAll (dice: number[], expected: number[]) {
+  return expected.every(e => dice.includes(e))
+}
+
 export const ScoreCalculator: IScoreCalculator = {
   calculateUpperSectionTotal: (player: Player) => {
-    const upperTotal = ScoringCategoryDescriptions
-      .filter((scd) => scd.section === "Upper")
-      .map((scd) => player.scoring[scd.category] ?? 0)
-      .reduce((total, previous) => (total ?? 0) + (previous ?? 0)) ?? 0;
-      return upperTotal;
+    return ScoringCategoryDescriptions
+        .filter((scd) => scd.section === "Upper")
+        .map((scd) => player.scoring[scd.category] ?? 0)
+        .reduce((total, previous) => (total ?? 0) + (previous ?? 0)) ?? 0;
   },
   calculateUpperSectionBonus: (player: Player) => {
     const upperTotal = ScoreCalculator.calculateUpperSectionTotal(player);
-    const upperBonus = upperTotal >= 63 ? 50 : 0;
-    return upperBonus;
+
+    return upperTotal >= 63 ? 50 : 0;
   },
   calculateLowerSectionTotal: (player: Player) => {
-    const lowerTotal = ScoringCategoryDescriptions
-      .filter((scd) => scd.section === "Lower")
-      .map((scd) => player.scoring[scd.category] ?? 0)
-      .reduce((total, previous) => (total ?? 0) + (previous ?? 0)) ?? 0;
-      return lowerTotal;
+    return ScoringCategoryDescriptions
+        .filter((scd) => scd.section === "Lower")
+        .map((scd) => player.scoring[scd.category] ?? 0)
+        .reduce((total, previous) => (total ?? 0) + (previous ?? 0)) ?? 0;
   },
   calculateTotal: (player: Player) => {
     const upperTotal = ScoreCalculator.calculateUpperSectionTotal(player);
     const upperBonus = ScoreCalculator.calculateUpperSectionBonus(player);
-    const lowerTotal = ScoreCalculator.calculateLowerSectionTotal(player);;
-    const finalTotal = upperTotal + upperBonus + lowerTotal;
-    return finalTotal;
+    const lowerTotal = ScoreCalculator.calculateLowerSectionTotal(player);
+
+    return upperTotal + upperBonus + lowerTotal;
   },
   calculators: {
     "ones": (dice: number[]) => {
@@ -76,72 +83,65 @@ export const ScoreCalculator: IScoreCalculator = {
       // Sum all dice showing 6
       return sum(dice.filter((d) => d === 6));
     },
-    "onePair": (dice: number[]) => {
-      // Sum of two identical dice. As there may be two pairs, take the highest scoring pair.
-      let score = 0;
-      const groupedDice = groupDice(dice);
-      if (groupedDice[0].length >= 2) score = groupedDice[0][0] * 2;
-      if (groupedDice.length >= 2 &&
-        groupedDice[1].length >= 2 &&
-        groupedDice[1][0] > groupedDice[0][0]) score = groupedDice[1][0] * 2;
-      return score;
-    },
-    "twoPairs": (dice: number[]) => {
-      // Sum of two pair, otherwise 0
-      let score = 0;
-      const groupedDice = groupDice(dice);
-      if (groupedDice.length >= 2 &&
-        groupedDice[0].length >= 2 &&
-        groupedDice[1].length === 2) score = groupedDice[0][0] * 2 + groupedDice[1][0] * 2;
-      return score;
-    },
     "threeOfAKind": (dice: number[]) => {
       // Sum of 3 identical dice, otherwise 0
-      let score = 0;
       const groupedDice = groupDice(dice);
-      if (groupedDice[0].length >= 3) score = groupedDice[0][0] * 3;
-      return score;
+
+      if (groupedDice[0].length >= 3) {
+        return sum(dice);
+      }
+
+      return 0;
     },
     "fourOfAKind": (dice: number[]) => {
       // Sum of 4 identical dice, otherwise 0
-      let score = 0;
       const groupedDice = groupDice(dice);
-      if (groupedDice[0].length >= 4) score = groupedDice[0][0] * 4;
-      return score;
-    },
-    "smallStraight": (dice: number[]) => {
-      // Score 15 if small straight [1, 2, 3, 4, 5] is showing
-      const orderedDice = orderBy(dice);
-      let score = 0;
-      if (isEqual(orderedDice, [1, 2, 3, 4, 5])) score = 15;
-      return score;
-    },
-    "largeStraight": (dice: number[]) => {
-      // Score 20 if large straight [2, 3, 4, 5, 6] is showing
-      const orderedDice = orderBy(dice);
-      let score = 0;
-      if (isEqual(orderedDice, [2, 3, 4, 5, 6])) score = 20;
-      return score;
+
+      if (groupedDice[0].length >= 4) {
+        return sum(dice);
+      }
+
+      return 0;
     },
     "fullHouse": (dice: number[]) => {
-      // Sum of all dice, if there is a separate three of a kind and one pair
-      let score = 0;
+      // Score 25 if there is a separate three of a kind and one pair
       const groupedDice = groupDice(dice);
-      if (groupedDice.length === 2 &&
-        groupedDice[0].length === 3 &&
-        groupedDice[1].length === 2) score = sum(dice);
-      return score;
+
+      if (groupedDice.length === 2 && groupedDice[0].length === 3 && groupedDice[1].length === 2) {
+        return 25;
+      }
+
+      return 0;
+    },
+    "smallStraight": (dice: number[]) => {
+      // Score 30 if small straight [1, 2, 3, 4], [2, 3, 4, 5], or [3, 4, 5, 6] is showing
+      if (includesAll(dice, [1, 2, 3, 4]) || includesAll(dice, [2, 3, 4, 5]) || includesAll(dice, [3, 4, 5, 6])) {
+        return 30;
+      }
+
+      return 0;
+    },
+    "largeStraight": (dice: number[]) => {
+      // Score 40 if large straight [1, 2, 3, 4, 5] or [2, 3, 4, 5, 6] is showing
+      if (includesAll(dice, [1, 2, 3, 4, 5]) || includesAll(dice, [2, 3, 4, 5, 6])) {
+        return 40;
+      }
+
+      return 0;
+    },
+    "yatzy": (dice: number[]) => {
+      // Score 50 if all dice are the same, otherwise 0
+      const groupedDice = groupDice(dice);
+
+      if (groupedDice[0].length === 5) {
+        return 50;
+      }
+
+      return 0;
     },
     "chance": (dice: number[]) => {
       // Sum all dice, regardless of value
       return sum(dice);
-    },
-    "yatzy": (dice: number[]) => {
-      // Score 50 if all dice are the same, otherwise 0
-      let score = 0;
-      const groupedDice = groupDice(dice);
-      if (groupedDice[0].length === 5) score = 50;
-      return score;
-    },
-  },
+    }
+  }
 };
